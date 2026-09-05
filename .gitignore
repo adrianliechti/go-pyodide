@@ -1,0 +1,14 @@
+# downloaded wheels and the site directory of examples/packages
+examples/packages/wheels/
+
+# wazero compilation cache (README example uses WithCacheDir(".cache"))
+.cache/
+
+# standalone script runner
+/gopy
+/out/
+
+# partial downloads
+*.part
+
+.DS_Store
