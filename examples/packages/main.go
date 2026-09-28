@@ -39,7 +39,7 @@ var requirements = []string{
 	"pypdf",
 	// Pinned to the exact pdfminer.six pdfplumber depends on, so we bundle the
 	// version it was tested against rather than whatever PyPI serves as latest.
-	"pdfminer.six==20251230",
+	"pdfminer.six==20260107",
 	"pdfplumber",
 	"reportlab",
 	"markdown",
@@ -271,6 +271,18 @@ def _():
     writer.write("/out/rotated.pdf")  # streams are FlateDecode: zlib at work
     r = PdfReader("/out/rotated.pdf")
     return text, r.metadata.title, r.pages[0].rotation
+
+@step("pypdf encrypted PDF", "pypdf")
+def _():
+    from pypdf import PdfReader, PdfWriter
+    writer = PdfWriter(clone_from="/out/hello.pdf")
+    writer.encrypt("example-password", algorithm="AES-256")
+    writer.write("/out/encrypted.pdf")
+    reader = PdfReader("/out/encrypted.pdf")
+    assert reader.is_encrypted
+    assert reader.decrypt("wrong-password") == 0
+    assert reader.decrypt("example-password") != 0
+    return "AES-256", reader.pages[0].extract_text()
 
 @step("pdfminer.six")
 def _():

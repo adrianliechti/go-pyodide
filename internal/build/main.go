@@ -27,9 +27,21 @@ func main() {
 	version := flag.String("version", "3.14.7", "CPython version")
 	sdk := flag.String("sdk", "24", "wasi-sdk version used by the release")
 	out := flag.String("out", "internal/wasm", "output directory")
+	patchOnly := flag.Bool("patch-only", false, "apply and precompile patches without downloading the interpreter")
 	flag.Parse()
 
-	if err := run(context.Background(), *version, *sdk, *out); err != nil {
+	ctx := context.Background()
+	var err error
+	if *patchOnly {
+		var wasm []byte
+		wasm, err = os.ReadFile(filepath.Join(*out, "python.wasm"))
+		if err == nil {
+			err = installPatches(ctx, wasm, *out, false)
+		}
+	} else {
+		err = run(ctx, *version, *sdk, *out)
+	}
+	if err != nil {
 		log.Fatal(err)
 	}
 }
@@ -104,6 +116,18 @@ func run(ctx context.Context, version, sdk, out string) error {
 		return fmt.Errorf("python.wasm not found in archive")
 	}
 
+	if err := installPatches(ctx, wasm, out, true); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(out, "version.txt"), []byte(version+"\n"), 0o644); err != nil {
+		return err
+	}
+	log.Printf("done: python %s", version)
+	return nil
+}
+
+func installPatches(ctx context.Context, wasm []byte, out string, compileAll bool) error {
+	lib := filepath.Join(out, "lib")
 	// Locate the stdlib directory (lib/python3.X).
 	entries, err := os.ReadDir(lib)
 	if err != nil {
@@ -124,6 +148,7 @@ func run(ctx context.Context, version, sdk, out string) error {
 	if err != nil {
 		return err
 	}
+	var targets []string
 	for _, p := range patches {
 		data, err := os.ReadFile(filepath.Join(out, "patches", p.Name()))
 		if err != nil {
@@ -132,24 +157,20 @@ func run(ctx context.Context, version, sdk, out string) error {
 		if err := os.WriteFile(filepath.Join(lib, stdlib, p.Name()), data, 0o644); err != nil {
 			return err
 		}
+		targets = append(targets, "/lib/"+stdlib+"/"+p.Name())
 	}
 
 	log.Printf("precompiling %s/%s", lib, stdlib)
-	if err := precompile(ctx, wasm, lib, "/lib/"+stdlib); err != nil {
-		return err
+	if compileAll {
+		targets = []string{"/lib/" + stdlib}
 	}
-
-	if err := os.WriteFile(filepath.Join(out, "version.txt"), []byte(version+"\n"), 0o644); err != nil {
-		return err
-	}
-	log.Printf("done: python %s, stdlib %s", version, stdlib)
-	return nil
+	return precompile(ctx, wasm, lib, targets...)
 }
 
 // precompile runs `python -m compileall` inside the wasm module with lib
 // mounted writable, producing hash-based .pyc files that do not depend on
 // source mtimes (which an embedded fs.FS does not preserve).
-func precompile(ctx context.Context, wasm []byte, lib, guestStdlib string) error {
+func precompile(ctx context.Context, wasm []byte, lib string, targets ...string) error {
 	rt := wazero.NewRuntime(ctx)
 	defer rt.Close(ctx)
 
@@ -161,6 +182,7 @@ func precompile(ctx context.Context, wasm []byte, lib, guestStdlib string) error
 		return err
 	}
 
+	args := append([]string{"/python.wasm", "-m", "compileall", "-q", "-f", "--invalidation-mode", "unchecked-hash"}, targets...)
 	cfg := wazero.NewModuleConfig().
 		WithName("").
 		WithStdout(os.Stdout).
@@ -174,7 +196,7 @@ func precompile(ctx context.Context, wasm []byte, lib, guestStdlib string) error
 		// leaves alone; embedded files have no reliable mtime.
 		WithEnv("PYTHONDONTWRITEBYTECODE", "1").
 		WithFSConfig(wazero.NewFSConfig().WithDirMount(lib, "/lib")).
-		WithArgs("/python.wasm", "-m", "compileall", "-q", "-f", "--invalidation-mode", "unchecked-hash", guestStdlib)
+		WithArgs(args...)
 
 	_, err = rt.InstantiateModule(ctx, compiled, cfg)
 	return err

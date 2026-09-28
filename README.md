@@ -181,6 +181,19 @@ python-docx and python-pptx (lxml), reportlab and pdfplumber (Pillow),
 pdfminer.six (imports cryptography at module level) and extract-msg (imports
 ssl) do not.
 
+**Password-protected PDFs work with pypdf**, including AES-128, AES-256-R5
+and AES-256. A lazy adapter uses Go's `crypto/aes` and `crypto/cipher` through
+the host device interface; installing the pure-Python pypdf wheel is enough.
+The adapter is tested with pypdf 6.19.0 and supports encryption, decryption,
+user and owner passwords, and pypdf's strict/lenient stream handling. The
+package example includes an AES-256 round trip.
+
+Use `writer.encrypt(password, algorithm="AES-256")` to select AES explicitly.
+pypdf defaults to RC4, which remains supported for legacy PDFs but is
+obsolete for new encryption. This adapter provides pypdf's AES backend;
+`cryptography` and `PyCryptodome` themselves still require native extensions.
+See the [pypdf encryption documentation](https://pypdf.readthedocs.io/en/latest/user/encryption-decryption.html).
+
 ## Performance
 
 Start-up is about 35 ms per run for a trivial script and 100–200 ms with
@@ -197,8 +210,10 @@ RECORD, namespace packages, `.data` relocation, concurrent installs), the
 zlib device checked byte-for-byte against Go's own compressors and driven
 with randomized chunk sizes and output limits, concurrency, memory caps,
 stack exhaustion, cancellation mid-stream, closing during a run, 20 MB
-stdio, Unicode paths and filesystem operations. `go test -race` passes too,
-just slower. `make bench` reports start-up and zlib throughput.
+stdio, Unicode paths and filesystem operations. AES tests use NIST vectors
+and encrypted PDFs produced by the native cryptography backend; the pinned
+pypdf test wheel and PDF fixtures keep these tests offline. `go test -race`
+passes too, just slower. `make bench` reports start-up and zlib throughput.
 
 ## How it works
 
@@ -207,7 +222,7 @@ Go ── wazero ──▶ python.wasm (CPython 3.14, wasm32-wasi)
        │             ├─ /usr/local/lib   embedded stdlib (fs.FS)
        │             ├─ .../site-packages  wheels, extracted on the host
        │             ├─ /tmp             per-run scratch directory
-       │             ├─ /dev/pyodide     host devices (zlib)
+       │             ├─ /dev/pyodide     host devices (zlib, AES)
        │             └─ your mounts
        └── WASI: stdio, clock, random, filesystem
 ```
@@ -216,8 +231,10 @@ Go ── wazero ──▶ python.wasm (CPython 3.14, wasm32-wasi)
 library inside the wasm module itself (so the `.pyc` format always matches)
 and installs the files in `internal/wasm/patches` into it. To move to another
 CPython version, change `PYTHON_VERSION` in the Makefile and run
-`make fetch-python`; the same command must be run after editing a patch file,
-because the precompiled `.pyc` files do not track source changes.
+`make fetch-python`. After editing a patch file, run `make patch-python` to
+apply the patches and regenerate bytecode using the existing interpreter,
+without downloading it again. The precompiled `.pyc` files do not track
+source changes automatically.
 
 ## License
 

@@ -23,8 +23,14 @@ def _patch_selector_events(module):
     loop._write_to_self = lambda self: None
 
 
+def _patch_pypdf_crypto(module):
+    from _pyodide_pypdf import install
+    install(module)
+
+
 _PATCHES = {
     "asyncio.selector_events": _patch_selector_events,
+    "pypdf._crypt_providers": _patch_pypdf_crypto,
 }
 
 

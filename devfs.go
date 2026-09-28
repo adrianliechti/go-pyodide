@@ -34,7 +34,8 @@ type deviceFS struct {
 }
 
 var devices = &deviceFS{devices: map[string]func([]string) (device, experimentalsys.Errno){
-	"zlib": openZlibDevice,
+	"zlib":   openZlibDevice,
+	"crypto": openCryptoDevice,
 }}
 
 func (d *deviceFS) OpenFile(path string, flag experimentalsys.Oflag, perm fs.FileMode) (experimentalsys.File, experimentalsys.Errno) {

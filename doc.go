@@ -17,5 +17,6 @@
 // Only pure-Python wheels (platform tag "any") can be added: the interpreter
 // is a single wasm module, so it cannot load native extension modules. The
 // embedded build also lacks a few optional stdlib modules that need external
-// C libraries: zlib, bz2, lzma, ssl, sqlite3, ctypes and the tkinter family.
+// C libraries: bz2, lzma, ssl, sqlite3, ctypes and the tkinter family. Go host
+// devices provide zlib and an AES backend for pypdf's encrypted PDF support.
 package pyodide

@@ -52,7 +52,7 @@ func NewResolver() *Resolver {
 	}
 }
 
-// Resolve adds a requirement such as "openpyxl" or "pdfminer.six==20251230"
+// Resolve adds a requirement such as "openpyxl" or "pdfminer.six==20260107"
 // and everything it needs.
 func (r *Resolver) Resolve(ctx context.Context, spec string) error {
 	req, ok := parseRequirement(spec)
