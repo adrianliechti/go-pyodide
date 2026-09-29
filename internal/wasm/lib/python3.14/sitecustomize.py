@@ -68,4 +68,7 @@ class _PatchFinder:
 
 
 if sys.platform == "wasi":
+    # The embedded wheel supplies zoneinfo's usual tzdata fallback. Appending
+    # it keeps explicitly installed versions in site-packages authoritative.
+    sys.path.append(sys.base_prefix.rstrip("/") + "/lib/tzdata.whl")
     sys.meta_path.insert(0, _PatchFinder())

@@ -11,6 +11,10 @@ fetch-python: ## Download the CPython WASI release into internal/wasm and precom
 	go run ./internal/build -version $(PYTHON_VERSION) -sdk $(WASI_SDK)
 	@ls -la internal/wasm/python.wasm
 
+.PHONY: fetch-tzdata
+fetch-tzdata: ## Download and verify the pinned offline timezone database
+	go run ./internal/build -tzdata-only
+
 .PHONY: patch-python
 patch-python: ## Apply and precompile patches without downloading the interpreter
 	go run ./internal/build -patch-only

@@ -169,6 +169,25 @@ The WASI build has no threads, no subprocesses, no sockets and no OpenSSL:
 `asyncio` works for coroutines and timers (a start-up patch removes the
 event loop's socket-based wake-up).
 
+**Named timezones work offline by default.** The embedded
+[tzdata 2026.4](https://pypi.org/project/tzdata/2026.4/) wheel supplies the IANA
+database used by the standard `zoneinfo` module, including historical offsets
+and daylight-saving transitions. No wheel installation or host timezone files
+are needed:
+
+```python
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+datetime(2026, 7, 1, 12, tzinfo=ZoneInfo("Europe/Zurich")).isoformat()
+# '2026-07-01T12:00:00+02:00'
+```
+
+An explicitly installed `tzdata` wheel takes precedence over the bundled
+version. Standard `PYTHONTZPATH` and `zoneinfo.reset_tzpath()` behavior is
+preserved. This supplies named zones; it does not select the host's local
+timezone for the interpreter.
+
 The build also lacks the stdlib modules that depend on external C libraries:
 bz2, lzma, sqlite3, ctypes, tkinter. **zlib is provided by this package**: the
 Go `compress` packages serve a `zlib` module through a device file, so
@@ -201,7 +220,7 @@ heavier imports such as asyncio, on an M-series Mac. The standard library and
 every installed wheel are byte-compiled to hash-based `.pyc` files ahead of
 time, so imports skip parsing. Compute-bound Python runs a few times slower
 than native CPython. The embedded interpreter and standard library add about
-50 MB to the binary.
+50 MB to the binary; the bundled timezone wheel adds about 350 KB.
 
 ## Testing
 
@@ -214,12 +233,15 @@ stdio, Unicode paths and filesystem operations. AES tests use NIST vectors
 and encrypted PDFs produced by the native cryptography backend; the pinned
 pypdf test wheel and PDF fixtures keep these tests offline. `go test -race`
 passes too, just slower. `make bench` reports start-up and zlib throughput.
+Timezone tests load every bundled zone, verify offsets and daylight-saving
+transitions, and check that an installed tzdata package overrides the bundle.
 
 ## How it works
 
 ```
 Go ── wazero ──▶ python.wasm (CPython 3.14, wasm32-wasi)
        │             ├─ /usr/local/lib   embedded stdlib (fs.FS)
+       │             ├─ .../tzdata.whl   offline timezone database
        │             ├─ .../site-packages  wheels, extracted on the host
        │             ├─ /tmp             per-run scratch directory
        │             ├─ /dev/pyodide     host devices (zlib, AES)
@@ -236,7 +258,16 @@ apply the patches and regenerate bytecode using the existing interpreter,
 without downloading it again. The precompiled `.pyc` files do not track
 source changes automatically.
 
+`make fetch-python` also downloads the pinned timezone wheel. To update it
+independently, change the version, URL and SHA-256 pins in
+[`internal/build/tzdata.go`](./internal/build/tzdata.go), run
+`make fetch-tzdata`, and update the version documented above. The wheel is
+verified before it replaces the embedded copy. It is imported directly from
+the archive as a fallback after site-packages, with no extraction or downloads
+at runtime.
+
 ## License
 
 MIT. The embedded interpreter is CPython, distributed under the PSF license;
 see `internal/wasm/LICENSE`.
+The bundled tzdata wheel retains its upstream Apache-2.0 license files.

@@ -28,11 +28,17 @@ func main() {
 	sdk := flag.String("sdk", "24", "wasi-sdk version used by the release")
 	out := flag.String("out", "internal/wasm", "output directory")
 	patchOnly := flag.Bool("patch-only", false, "apply and precompile patches without downloading the interpreter")
+	tzdataOnly := flag.Bool("tzdata-only", false, "download the pinned timezone database without changing the interpreter")
 	flag.Parse()
+	if *patchOnly && *tzdataOnly {
+		log.Fatal("-patch-only and -tzdata-only cannot be combined")
+	}
 
 	ctx := context.Background()
 	var err error
-	if *patchOnly {
+	if *tzdataOnly {
+		err = installTZData(ctx, *out)
+	} else if *patchOnly {
 		var wasm []byte
 		wasm, err = os.ReadFile(filepath.Join(*out, "python.wasm"))
 		if err == nil {
@@ -116,6 +122,9 @@ func run(ctx context.Context, version, sdk, out string) error {
 		return fmt.Errorf("python.wasm not found in archive")
 	}
 
+	if err := installTZData(ctx, out); err != nil {
+		return err
+	}
 	if err := installPatches(ctx, wasm, out, true); err != nil {
 		return err
 	}

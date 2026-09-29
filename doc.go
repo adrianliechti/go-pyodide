@@ -19,4 +19,5 @@
 // embedded build also lacks a few optional stdlib modules that need external
 // C libraries: bz2, lzma, ssl, sqlite3, ctypes and the tkinter family. Go host
 // devices provide zlib and an AES backend for pypdf's encrypted PDF support.
+// Bundled tzdata supplies the IANA timezone database for zoneinfo offline.
 package pyodide
